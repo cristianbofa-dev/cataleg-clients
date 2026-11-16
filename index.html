@@ -5,8 +5,8 @@
 (function(){try{var P='clients_',S=Storage.prototype,L=window.localStorage;
 ['getItem','setItem','removeItem'].forEach(function(m){var o=S[m];S[m]=function(k){var a=Array.prototype.slice.call(arguments);
 if(this===L&&typeof k==='string'&&k.indexOf(P)!==0)a[0]=P+k;return o.apply(this,a);};});}catch(e){}})();</script><script>/* Web per a clients: sense service worker ni còpia offline */
-(function(){ try{ if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(function(rs){ rs.forEach(function(r){ if(!/\/crown\/$/.test(r.scope)) r.unregister(); }); }); }
-  if(window.caches){ caches.keys().then(function(ks){ ks.forEach(function(k){ if(k.indexOf('crown-')!==0) caches.delete(k); }); }); } }catch(e){} })();</script>
+(function(){ try{ if('serviceWorker' in navigator){ navigator.serviceWorker.getRegistrations().then(function(rs){ rs.forEach(function(r){ if(!/\/crown\/$/.test(r.scope)) r.unregister(); }); }).catch(function(){}); }
+  if(window.caches){ caches.keys().then(function(ks){ ks.forEach(function(k){ if(k.indexOf('crown-')!==0) caches.delete(k); }); }).catch(function(){}); } }catch(e){} })();</script><script>var NEXE_PUBLIC = true;</script>
 <script>
 window.addEventListener('error',function(e){try{var d=document.getElementById('__errbar');if(!d){d=document.createElement('div');d.id='__errbar';d.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#b00020;color:#fff;font:12px/1.35 -apple-system,sans-serif;padding:8px 10px;max-height:40vh;overflow:auto;white-space:pre-wrap';(document.body||document.documentElement).appendChild(d);}d.textContent+=((e.message||'error')+' (linia '+(e.lineno||'?')+':'+(e.colno||'?')+')\n');}catch(x){}});
 </script>
@@ -1616,6 +1616,7 @@ function _applyEditModeUI(){
 }
 
 function _restoreEditMode(){
+  if(_isPublicApp()) return;
   try{
     if(localStorage.getItem('nexe_edit_mode') === '1'){
       var hasOverrides = false;
@@ -1635,7 +1636,10 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
   document.addEventListener('DOMContentLoaded', _restoreEditMode);
 }
 
+// Versions publicades (Crown, web de clients): sense pestanya de clients ni mode edició
+function _isPublicApp(){ return typeof NEXE_PUBLIC !== 'undefined' && NEXE_PUBLIC; }
 function toggleEditMode(){
+  if(_isPublicApp()){ _editMode = false; return; }
   _editMode = !_editMode;
   try{ localStorage.setItem('nexe_edit_mode', _editMode ? '1' : '0'); }catch(e){}
   _applyEditModeUI();
@@ -2745,7 +2749,7 @@ function showPage(page, data, pages, headerTitle, btnBack, navItems, skipNavStac
 
   if(page === 'home'){ showHome(pages); return; }
   if(page === 'advisor'){ pages.advisor.classList.add('active'); return; }
-  if(page === 'clients'){ showClients(pages); return; }
+  if(page === 'clients'){ if(_isPublicApp()){ navigate('home', null, pages); return; } showClients(pages); return; }
   if(page === 'lists'){ showLists(pages); return; }
   if(page.startsWith('list/')){ showListDetail(page.split('/')[1], pages); return; }
   if(page === 'settings'){ showSettings(pages); return; }
@@ -4927,7 +4931,7 @@ function _internalShareOrder(){
   var lines = [];
   lines.push('🧾 *PEDIDO NEXE*');
   if(orderClientId && orderClientName){
-    lines.push('👤 *Client:* '+orderClientName);
+    if(!_isPublicApp()) lines.push('👤 *Client:* '+orderClientName);
     var c = getClient(orderClientId);
     if(c){
       var sa = getClientShippingAddress(c);
