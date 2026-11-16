@@ -6,7 +6,7 @@
  * La versió la posa tools/nexe.py a cada build: quan canvia, es desa la
  * versió nova i l'app es recarrega sola.
  */
-var VERSION = '2b5f4bdd8785';
+var VERSION = 'd74cfb8af316';
 var CACHE = 'crown-cataleg-' + VERSION;
 var CORE = ['./', './index.html', './manifest.json', './clau.json',
             './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
