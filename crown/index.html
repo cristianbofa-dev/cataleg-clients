@@ -570,6 +570,14 @@ body.presentation .promo-card:not(.promo-pack){background:rgba(44,44,46,.85);bor
 body.presentation .promo-card:not(.promo-pack) .promo-pitch{color:rgba(245,245,247,.6)}
 body.presentation .promo-img:not(.promo-img-pack){background:#2c2c2e}
 @media(min-width:768px){.promo-scroll{margin-left:-28px;margin-right:-28px;padding-left:28px;padding-right:28px}.promo-card{flex-basis:290px}.promo-card.promo-pack{flex-basis:380px}.promo-img{height:190px}}
+
+/* ── Enllaç al catàleg Crown ── */
+.crown-link-card{display:flex;align-items:center;gap:14px;margin:0 0 24px;padding:14px 16px;border-radius:18px;background:linear-gradient(135deg,#1d1d1f,#2c2c2e);color:#f5f5f7;text-decoration:none;box-shadow:0 6px 22px rgba(0,0,0,.08)}
+.crown-link-logo{flex:0 0 auto;padding:8px 10px;border-radius:10px;background:#d71920;color:#fff;font:800 14px/1 -apple-system,system-ui,sans-serif;letter-spacing:.08em}
+.crown-link-txt{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.crown-link-txt b{font-size:16px}
+.crown-link-txt small{font-size:12.5px;color:rgba(245,245,247,.65)}
+.crown-link-go{flex:0 0 auto;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.12);font-weight:700;font-size:14px}
 </style>
 <title>Catàleg Crown</title>
 </head>
@@ -2299,6 +2307,8 @@ function renderHome(pages){
   }
   pages.home.appendChild(grid);
 
+  if(!_isPublicApp()) pages.home.appendChild(_crownLinkCard());
+
   // Recomanats NEXE: sota les categories
   var recomanatsContainer = document.createElement('div');
   recomanatsContainer.id = 'recomanatsSection';
@@ -2731,6 +2741,18 @@ function showHome(pages){
   pages.home.classList.add('active');
 }
 
+// Enllaç al catàleg Crown (només al catàleg intern; les versions publicades no el porten)
+var CROWN_URL = 'https://www.nexeindustrial.es/crown/';
+function _crownLinkCard(){
+  var a = document.createElement('a');
+  a.className = 'crown-link-card';
+  a.href = CROWN_URL; a.target = '_blank'; a.rel = 'noopener';
+  a.innerHTML = '<span class="crown-link-logo">CROWN</span>'
+    + '<span class="crown-link-txt"><b>Catàleg de màquines Crown</b><small>203 màquines amb preus · campanya tardor-hivern 2026</small></span>'
+    + '<span class="crown-link-go">Obrir ↗</span>';
+  return a;
+}
+
 function showCategory(catId, subcatId, filter, pages){
   pages.category.classList.add('active');
 
@@ -2823,6 +2845,11 @@ function showCategory(catId, subcatId, filter, pages){
   // Product grid
   _gridCtx = catId + '|' + (subcatId || '') + '|' + ((filter && filter.type) ? (filter.type + ':' + filter.value) : '');
   renderProductGrid(pages.categoryGrid, prods, pages);
+  if(catId === 'maquinaria' && !_isPublicApp() && pages.categoryGrid.parentNode){
+    var old = document.getElementById('crownLinkCat'); if(old) old.remove();
+    var cl = _crownLinkCard(); cl.id = 'crownLinkCat';
+    pages.categoryGrid.parentNode.insertBefore(cl, pages.categoryGrid);
+  } else { var o2 = document.getElementById('crownLinkCat'); if(o2) o2.remove(); }
 }
 
 function renderVezzaniSubmenu(catId, navCat, allProds, pages){
