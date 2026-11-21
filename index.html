@@ -1,6 +1,134 @@
 <!DOCTYPE html>
 <html lang="ca">
 <head>
+<meta name="referrer" content="no-referrer">
+<style>.legal-footer{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 16px;padding:12px 20px 20px;font-size:13px;color:inherit}
+.legal-footer a,.legal-footer button,.order-legal a,.legal-dialog a,.legal-notice a{color:inherit;text-decoration:underline}
+.legal-footer button,.legal-actions button,.legal-video button{font:inherit;cursor:pointer}
+.legal-footer button{background:none;border:0;padding:0}
+.legal-footer a,.legal-footer button{display:inline-flex;align-items:center;min-height:32px}
+.order-legal{font-size:13px;line-height:1.35}
+.order-legal p{margin:6px 0}
+.order-panel .order-panel-footer{max-height:85vh;overflow-y:auto}
+.legal-dialog,.legal-notice{box-sizing:border-box;background:#fff;color:#1d1d1f;padding:14px;border:1px solid #777;border-radius:12px;font:14px/1.45 system-ui,sans-serif}
+.legal-dialog{width:min(92vw,32rem);max-height:90vh;overflow:auto;margin:auto}
+.legal-dialog::backdrop{background:#0008}
+.legal-dialog h2{margin:0 0 8px;font-size:19px}
+.legal-dialog p,.legal-notice p{margin:6px 0}
+.legal-dialog label{display:block;margin:8px 0}
+.legal-dialog textarea{box-sizing:border-box;width:100%;padding:8px;font:inherit}
+.legal-notice{position:fixed;z-index:75;bottom:calc(82px + env(safe-area-inset-bottom));right:8px;left:auto;width:min(calc(100% - 16px),31rem)}
+.legal-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.legal-actions :is(button,a),.legal-video button{min-height:36px;padding:5px 9px;border:1px solid #aaa;border-radius:7px;background:#f5f5f7;color:#1d1d1f}
+.legal-actions a:not([hidden]){display:inline-flex;align-items:center;box-sizing:border-box}
+.legal-video{display:grid;place-content:center;text-align:center;flex:0 0 100%;min-height:100px}
+.legal-media-link{min-height:36px;padding:4px 12px;color:inherit;background:none;border:0;text-decoration:underline;font:inherit;cursor:pointer}
+body:has(#cartBar:not([hidden])) .legal-footer{padding-bottom:calc(88px + env(safe-area-inset-bottom))}
+</style>
+<script>/* Controls per a les edicions públiques. */
+(function () {
+  'use strict';
+  var consentKey = 'nexe_external_media';
+  var lifetime = 365 * 24 * 60 * 60 * 1000;
+  var photoOrigins = ['https://www.insemactools.es', 'https://www.cimaser.com'];
+  var videoOrigins = ['https://www.youtube.com'];
+
+  function readConsent() {
+    try {
+      var value = JSON.parse(localStorage.getItem(consentKey));
+      if (value && value.version === 1 && value.expires > Date.now()) return value;
+    } catch (error) {}
+    return null;
+  }
+
+  window.nexeMediaAllowed = function (source, kind) {
+    var choice = readConsent();
+    if (!choice || choice[kind] !== true) return false;
+    var origins = kind === 'photos' ? photoOrigins : videoOrigins;
+    try { return origins.includes(new URL(source).origin); }
+    catch (error) { return false; }
+  };
+
+  window.nexeWhatsAppDraft = function (text, isList) {
+    var dialog = document.getElementById('waDraft');
+    document.getElementById('waTitle').textContent = isList ? 'Comparteix la llista' : 'Sol·licitud comercial';
+    document.getElementById('waIntro').textContent = isList
+      ? 'Copia el text i enganxa’l a l’aplicació on vulguis compartir la llista.'
+      : 'Copia l’esborrany i enganxa’l al xat. Revisa’l abans d’enviar el missatge a NEXE Industrial.';
+    document.getElementById('waOpen').hidden = Boolean(isList);
+    dialog.querySelector('textarea').value = text;
+    document.getElementById('waStatus').textContent = '';
+    dialog.showModal();
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var draft = document.getElementById('waDraft');
+    var text = document.getElementById('waText');
+    var status = document.getElementById('waStatus');
+    draft.addEventListener('close', function () { text.value = ''; });
+    document.getElementById('waCopy').addEventListener('click', async function () {
+      try {
+        await navigator.clipboard.writeText(text.value);
+        status.textContent = 'Missatge copiat.';
+      } catch (error) {
+        text.focus();
+        text.select();
+        status.textContent = 'Copia el text seleccionat amb les opcions del teu dispositiu.';
+      }
+    });
+
+    var settings = document.getElementById('mediaSettings');
+    if (!settings) return;
+    var form = document.getElementById('mediaForm');
+    var notice = document.getElementById('mediaNotice');
+    var initial = readConsent();
+    notice.hidden = Boolean(initial);
+
+    function save(photos, videos) {
+      try {
+        localStorage.setItem(consentKey, JSON.stringify({
+          version: 1, expires: Date.now() + lifetime, photos: photos, videos: videos
+        }));
+      } catch (error) {
+        document.getElementById(settings.open ? 'mediaStatus' : 'mediaNoticeStatus').textContent =
+          'El navegador no ha pogut desar la tria.';
+        return;
+      }
+      notice.hidden = true;
+      if (settings.open) settings.close();
+      if (photos !== Boolean(initial && initial.photos) || videos !== Boolean(initial && initial.videos)) {
+        location.reload();
+      }
+    }
+
+    document.addEventListener('click', function (event) {
+      if (!event.target.closest('[data-media-settings]')) return;
+      var choice = readConsent();
+      form.elements.photos.checked = Boolean(choice && choice.photos);
+      form.elements.videos.checked = Boolean(choice && choice.videos);
+      settings.showModal();
+    });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      save(form.elements.photos.checked, form.elements.videos.checked);
+    });
+    ['mediaReject', 'mediaNone'].forEach(function (id) {
+      document.getElementById(id).addEventListener('click', function () { save(false, false); });
+    });
+    ['mediaAccept', 'mediaAll'].forEach(function (id) {
+      document.getElementById(id).addEventListener('click', function () { save(true, true); });
+    });
+    function syncConsent() {
+      var choice = readConsent();
+      if (Boolean(choice && choice.photos) !== Boolean(initial && initial.photos) ||
+          Boolean(choice && choice.videos) !== Boolean(initial && initial.videos)) location.reload();
+    }
+    window.addEventListener('storage', syncConsent);
+    window.addEventListener('pageshow', function (event) { if (event.persisted) syncConsent(); });
+  });
+})();
+</script>
+
 <script>/* Catàleg clients: memòria del navegador separada de les altres apps */
 (function(){try{var P='clients_',S=Storage.prototype,L=window.localStorage;
 ['getItem','setItem','removeItem'].forEach(function(m){var o=S[m];S[m]=function(k){var a=Array.prototype.slice.call(arguments);
@@ -630,6 +758,7 @@ body.presentation .promo-img:not(.promo-img-pack){background:#2c2c2e}
       </div>
     </div>
     <div class="page" id="page-clients"></div>
+    <footer class="legal-footer" lang="ca" aria-label="Informació legal"><a href="avis-legal.html">Avís legal</a> <a href="privacitat.html">Privacitat</a> <a href="galetes.html">Galetes</a> <a href="contacte.html">Contacte</a> <button type="button" data-media-settings>Preferències de galetes</button></footer>
   </div>
 
   <nav class="nav" id="nav">
@@ -656,10 +785,21 @@ body.presentation .promo-img:not(.promo-img-pack){background:#2c2c2e}
   <div class="order-panel-body" id="orderPanelBody"></div>
   <div class="order-panel-footer" id="orderPanelFooter">
     <div class="order-total-row"><span class="order-total-label">Total</span><span class="order-total-amount" id="orderTotal">0,00 €</span></div>
-    <textarea class="order-notes" id="orderNotes" placeholder="Observacions generals del pedido…" rows="2"></textarea>
+    <textarea class="order-notes" id="orderNotes" autocomplete="off" placeholder="Observacions generals del pedido…" rows="2"></textarea>
+    <div class="order-legal" id="orderLegal" lang="ca">
+  <p>El pressupost indicarà el preu segons la tarifa aplicable. El comercial confirmarà la disponibilitat, els ports, l’IVA i l’import final.
+     La sol·licitud no formalitza la compra.</p>
+  <p>Cristian Botellero (NEXE Industrial) utilitza les dades per gestionar la teva sol·licitud.
+     Evita incloure dades personals a les observacions. Consulta la
+     <a href="privacitat.html" target="_blank" rel="noopener">política de privacitat</a>
+     per conèixer la base jurídica i els teus drets.</p>
+  <p>Prepara el missatge, copia’l i obre WhatsApp. Tu decideixes si l’enganxes i l’envies.
+     WhatsApp (Meta) tracta les dades segons la seva
+     <a href="https://www.whatsapp.com/legal/privacy-policy-eea" target="_blank" rel="noreferrer">política de privacitat</a>.</p>
+</div>
     <div class="order-actions">
       <button class="order-action-btn secondary" id="orderClear">Buida</button>
-      <button class="order-action-btn primary" id="orderShare">Compartir</button>
+      <button class="order-action-btn primary" id="orderShare" aria-describedby="orderLegal">Prepara la sol·licitud</button>
     </div>
   </div>
 </div>
@@ -682,7 +822,7 @@ body.presentation .promo-img:not(.promo-img-pack){background:#2c2c2e}
       </div>
       <div class="add-modal-row">
         <label class="add-modal-label">Observacions (opcional)</label>
-        <textarea class="add-modal-textarea" id="addNotes" placeholder="Color, mida, etc." rows="2"></textarea>
+        <textarea class="add-modal-textarea" id="addNotes" autocomplete="off" placeholder="Color, mida, etc." rows="2"></textarea>
       </div>
     </div>
     <div class="add-modal-footer">
@@ -1311,6 +1451,7 @@ function _resolveImgPath(s){
 function _imgSrc(s){
   if(!s || typeof s !== 'string') return '';
   var r = _resolveImgPath(s);
+  if(_isPublicApp() && r.indexOf('http') === 0 && !window.nexeMediaAllowed(r, 'photos')) return '';
   if(r.indexOf('data:') === 0 || r.indexOf('http') === 0 || r.indexOf('blob:') === 0) return r;
   return location.protocol === 'file:' ? '' : r;
 }
@@ -1645,6 +1786,21 @@ if(document.readyState === 'complete' || document.readyState === 'interactive'){
 }
 
 // Versions publicades (Crown, web de clients): sense pestanya de clients ni mode edició
+function _photoSettings(p){
+  if(!_isPublicApp()) return '';
+  var pending = (p.imgs || []).some(function(src){
+    return src.indexOf('https://') === 0 && !window.nexeMediaAllowed(src, 'photos');
+  });
+  return pending ? '<button class="legal-media-link" type="button" data-media-settings>Configura les fotos externes</button>' : '';
+}
+
+function _productVideo(source){
+  if(_isPublicApp() && !window.nexeMediaAllowed(source, 'videos')){
+    return '<div class="gallery-slide legal-video"><button type="button" data-media-settings>Configura els vídeos de YouTube</button></div>';
+  }
+  return '<iframe src="'+escHtml(source)+'" title="Vídeo del producte" referrerpolicy="strict-origin-when-cross-origin" style="flex-shrink:0;width:100%;height:100%;border:none" allowfullscreen></iframe>';
+}
+
 function _isPublicApp(){ return typeof NEXE_PUBLIC !== 'undefined' && NEXE_PUBLIC; }
 function toggleEditMode(){
   if(_isPublicApp()){ _editMode = false; return; }
@@ -1978,6 +2134,7 @@ _loadEditOverrides();
 
 // Versió amb els canvis "enllaçats": els grups automàtics es renumeren, així que es neteja un cop el que hi havia guardat
 (function _bakeCleanup(){
+  if(_isPublicApp()) return;
   try{
     var BV = 'bake-2026-10-31';
     if(localStorage.getItem('nexe_bake_version') === BV) return;
@@ -3269,7 +3426,7 @@ var fit = 'contain';
       html += '</div>';
     }
     if(p.video){
-      html += '<iframe src="'+escHtml(p.video)+'" style="flex-shrink:0;width:100%;height:100%;border:none" allowfullscreen></iframe>';
+      html += _productVideo(p.video);
     }
     html += '</div>';
     if(_editMode){
@@ -3282,6 +3439,7 @@ var fit = 'contain';
     }
     html += '</div>';
 
+    html += _photoSettings(p);
     var _vgBrand = (_editOverrides[idx] && _editOverrides[idx].brand !== undefined) ? _editOverrides[idx].brand : def.brand;
     var _vgName = (_editOverrides[idx] && _editOverrides[idx].name !== undefined) ? _editOverrides[idx].name : def.name;
     var _vgRef = (_editOverrides[idx] && _editOverrides[idx].ref !== undefined) ? _editOverrides[idx].ref : p.r;
@@ -3846,7 +4004,7 @@ function showProduct(idx){
     html += '</div>';
   }
   if(p.video){
-    html += '<iframe src="'+escHtml(p.video)+'" style="flex-shrink:0;width:100%;height:100%;border:none" allowfullscreen></iframe>';
+    html += _productVideo(p.video);
   }
   html += '</div>';
   var totalSlides = imgs.length + (p.video ? 1 : 0);
@@ -3864,6 +4022,7 @@ function showProduct(idx){
     html += '<input type="file" id="galleryFileInput" accept="image/*" capture="environment" style="display:none" multiple>';
   }
   html += '</div>';
+  html += _photoSettings(p);
   var compatible = p.aplic && p.aplic.length ? p.aplic.join(', ') : 'Consultar compatibilitat';
   var detailPrice = (_editOverrides[idx] && _editOverrides[idx].price !== undefined) ? _editOverrides[idx].price : (parseFloat(p.p)||0);
 var _dName = (_editOverrides[idx] && _editOverrides[idx].name !== undefined) ? _editOverrides[idx].name : p.n;
@@ -4506,6 +4665,8 @@ function shareList(list){
 
   if(navigator.share){
     navigator.share({title:list.name, text:text}).catch(function(){});
+  } else if(_isPublicApp()){
+    window.nexeWhatsAppDraft(text, true);
   } else {
     var ta = document.createElement('textarea');
     ta.value = text;
@@ -4543,17 +4704,43 @@ var orderNotes = '';
 var orderClientId = null;
 var orderClientName = '';
 
+function publicCartItems(){
+  return orderItems.map(function(item){
+    return {idx:item.idx, qty:item.qty, price:item.price, variantLabel:item.variantLabel};
+  });
+}
+
+var publicOrderLoaded = false;
 function loadOrder(){
+  if(_isPublicApp() && publicOrderLoaded) return;
   try{ orderItems = JSON.parse(localStorage.getItem('nexe_order')) || []; }catch(e){ orderItems = []; }
+  if(_isPublicApp()){
+    publicOrderLoaded = true;
+    if(!Array.isArray(orderItems)) orderItems = [];
+    orderItems = orderItems.filter(function(item){ return item && typeof item === 'object'; });
+    try{
+      localStorage.removeItem('nexe_order_notes');
+      localStorage.removeItem('nexe_order_client');
+      if(orderItems.some(function(item){ return Object.prototype.hasOwnProperty.call(item, 'notes'); })){
+        orderItems = publicCartItems();
+        localStorage.setItem('nexe_order', JSON.stringify(orderItems));
+      }
+    }catch(e){}
+    return;
+  }
   try{ orderNotes = localStorage.getItem('nexe_order_notes') || ''; }catch(e){ orderNotes = ''; }
   try{ var c = JSON.parse(localStorage.getItem('nexe_order_client')); if(c){ orderClientId = c.id; orderClientName = c.nom || c.name; } }catch(e){}
 }
 
 function saveOrder(){
-  localStorage.setItem('nexe_order', JSON.stringify(orderItems));
-  localStorage.setItem('nexe_order_notes', orderNotes);
-  if(orderClientId) localStorage.setItem('nexe_order_client', JSON.stringify({id:orderClientId, name:orderClientName}));
-  else localStorage.removeItem('nexe_order_client');
+  if(_isPublicApp()){
+    try{ localStorage.setItem('nexe_order', JSON.stringify(publicCartItems())); }catch(e){}
+  }else{
+    localStorage.setItem('nexe_order', JSON.stringify(orderItems));
+    localStorage.setItem('nexe_order_notes', orderNotes);
+    if(orderClientId) localStorage.setItem('nexe_order_client', JSON.stringify({id:orderClientId, name:orderClientName}));
+    else localStorage.removeItem('nexe_order_client');
+  }
   updateOrderBadge();
   updateCartBar();
 }
@@ -4849,7 +5036,10 @@ function renderOrderPanel(){
     notesEl.value = orderNotes || '';
     var newNotes = notesEl.cloneNode(true);
     notesEl.parentNode.replaceChild(newNotes, notesEl);
-    newNotes.addEventListener('input', function(){ orderNotes = this.value; saveOrder(); });
+    newNotes.addEventListener('input', function(){
+      orderNotes = this.value;
+      if(!_isPublicApp()) saveOrder();
+    });
   }
 }
 
@@ -4875,52 +5065,52 @@ function clearOrder(){
 
 
 /* ── Catàleg per a clients: comanda per WhatsApp ── */
-var CLIENT_WA = '34610732047';
-function _clientData(){
-  try { return JSON.parse(localStorage.getItem('client_dades') || '{}'); } catch(e){ return {}; }
-}
-function _clientSaveData(){
-  var d = {};
+function _clientReadData(){
+  var data = {};
   ['nom','empresa','tel','poblacio'].forEach(function(k){
-    var el = document.getElementById('cf_'+k); if(el) d[k] = el.value.trim();
+    data[k] = document.getElementById('cf_'+k).value.trim();
   });
-  try { localStorage.setItem('client_dades', JSON.stringify(d)); } catch(e){}
-  return d;
+  return data;
 }
 function _clientInitForm(){
   var footer = document.getElementById('orderPanelFooter');
   if(!footer || document.getElementById('clientForm')) return;
-  var d = _clientData();
+  try { localStorage.removeItem('client_dades'); } catch(e){}
   var box = document.createElement('div');
   box.id = 'clientForm';
   box.innerHTML = '<div class="client-form-title">Les teves dades</div>'
-    + '<div class="client-form-note">Rebràs la confirmació i el preu de la comanda del teu comercial.</div>'
     + '<div class="client-form">'
-    + '<input id="cf_nom" placeholder="Nom i cognoms *" autocomplete="name">'
-    + '<input id="cf_empresa" placeholder="Empresa *" autocomplete="organization">'
-    + '<input id="cf_tel" placeholder="Telèfon *" type="tel" autocomplete="tel">'
-    + '<input id="cf_poblacio" placeholder="Població" autocomplete="address-level2">'
+    + '<input id="cf_nom" aria-label="Nom i cognoms" placeholder="Nom i cognoms *" autocomplete="off" required>'
+    + '<input id="cf_empresa" aria-label="Empresa" placeholder="Empresa *" autocomplete="off" required>'
+    + '<input id="cf_tel" aria-label="Telèfon" placeholder="Telèfon *" type="tel" autocomplete="off" required>'
+    + '<input id="cf_poblacio" aria-label="Població (opcional)" placeholder="Població" autocomplete="off">'
     + '</div>';
   footer.insertBefore(box, footer.firstChild);
   ['nom','empresa','tel','poblacio'].forEach(function(k){
     var el = document.getElementById('cf_'+k);
-    el.value = d[k] || '';
-    el.addEventListener('input', function(){ this.classList.remove('err'); _clientSaveData(); });
+    el.addEventListener('input', function(){
+      this.classList.remove('err'); this.removeAttribute('aria-invalid');
+    });
   });
   var share = document.getElementById('orderShare');
-  if(share){ share.textContent = 'Enviar per WhatsApp'; share.classList.add('wa'); }
+  if(share) share.classList.add('wa');
   var notes = document.getElementById('orderNotes');
-  if(notes) notes.placeholder = 'Observacions (lloc d\'entrega, urgència…)';
+  if(notes) notes.placeholder = 'Observacions sobre la sol·licitud';
 }
 function _clientSendWhatsApp(){
   if(!orderItems.length) return;
-  var d = _clientSaveData(), missing = [];
+  var d = _clientReadData(), missing = [];
   [['nom','cf_nom'],['empresa','cf_empresa'],['tel','cf_tel']].forEach(function(f){
-    if(!d[f[0]]){ missing.push(f[1]); document.getElementById(f[1]).classList.add('err'); }
+    if(!d[f[0]]){
+      var field = document.getElementById(f[1]);
+      missing.push(field);
+      field.classList.add('err');
+      field.setAttribute('aria-invalid', 'true');
+    }
   });
-  if(missing.length){ document.getElementById(missing[0]).focus(); return; }
+  if(missing.length){ missing[0].reportValidity(); missing[0].focus(); return; }
   var L = [];
-  L.push('🧾 *COMANDA — CATÀLEG NEXE*');
+  L.push('🧾 *SOL·LICITUD COMERCIAL — CATÀLEG NEXE*');
   L.push('👤 ' + d.nom);
   L.push('🏢 ' + d.empresa);
   L.push('📞 ' + d.tel);
@@ -4938,18 +5128,8 @@ function _clientSendWhatsApp(){
   if(orderNotes) L.push('📌 ' + orderNotes);
   var lg = window._clientLang ? window._clientLang() : 'ca';
   if(lg !== 'ca') L.push('🌐 Idioma del client: ' + {es:'castellà', en:'anglès', uk:'ucraïnès'}[lg]);
-  L.push('Enviat des del catàleg NEXE');
-  var url = 'https://wa.me/' + CLIENT_WA + '?text=' + encodeURIComponent(L.join('\n'));
-  var a = document.createElement('a');
-  a.href = url; a.target = '_blank'; a.rel = 'noopener';
-  document.body.appendChild(a); a.click(); a.remove();
-  _clientToast((window._clientT||String)('S\'obre WhatsApp amb la comanda: prem Enviar per fer-la arribar.'));
-}
-function _clientToast(t){
-  var el = document.createElement('div');
-  el.textContent = t;
-  el.style.cssText = 'position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:10000;background:#1d1d1f;color:#fff;padding:12px 20px;border-radius:14px;font:600 15px -apple-system,system-ui,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.25);max-width:90vw;text-align:center';
-  document.body.appendChild(el); setTimeout(function(){ el.remove(); }, 5000);
+  L.push('Sol·licitud pendent de confirmació.');
+  window.nexeWhatsAppDraft(L.join('\n'));
 }
 document.addEventListener('DOMContentLoaded', _clientInitForm);
 if(document.readyState !== 'loading') _clientInitForm();
@@ -4958,7 +5138,7 @@ function shareOrder(){ return _clientSendWhatsApp(); }
 function _internalShareOrder(){
   if(orderItems.length === 0) return;
   var lines = [];
-  lines.push('🧾 *PEDIDO NEXE*');
+  lines.push(_isPublicApp() ? '🧾 *SOL·LICITUD COMERCIAL — CROWN · NEXE*' : '🧾 *PEDIDO NEXE*');
   if(orderClientId && orderClientName){
     if(!_isPublicApp()) lines.push('👤 *Client:* '+orderClientName);
     var c = getClient(orderClientId);
@@ -4986,12 +5166,15 @@ function _internalShareOrder(){
     if(getOrderBatteryDiscount() > 0) lines.push('🔋 Promoció bateries ('+getOrderBatteryCount()+' bateries): −'+formatPrice(getOrderBatteryDiscount()));
     if(_crownPorts() && getOrderHasCrown()) lines.push('🚚 '+(_onlyCrown()?'Ports':'Ports Crown')+': '+(getOrderPortsFree() ? 'gratuïts' : formatPrice(getOrderShipping())));
   }
-  lines.push('*TOTAL: '+formatPrice(getOrderTotal())+'*');
+  var totalLabel = _isPublicApp() ? 'TOTAL ORIENTATIU SENSE IVA' : 'TOTAL';
+  lines.push('*'+totalLabel+': '+formatPrice(getOrderTotal())+'*');
+  if(_isPublicApp()) lines.push('Sol·licitud pendent de confirmació.');
   if(orderNotes) lines.push('📌 '+orderNotes);
   lines.push('');
   lines.push('Generat amb Nexe Catàleg');
   var text = lines.join('\n');
 
+  if(_isPublicApp()) return window.nexeWhatsAppDraft(text);
   if(navigator.share){
     navigator.share({title:'Pedido Nexe',text:text}).catch(function(){});
   } else {
@@ -5472,6 +5655,7 @@ var _fbListsSyncing = false;
 var _fbListsLoaded = false;
 
 function initFirebaseSync(){
+  if(_isPublicApp()) return;
   if(location.protocol === 'file:'){
     console.log('[FB] file:// detected, skipping Firebase');
     return;
@@ -5833,7 +6017,7 @@ if(location.protocol === 'file:'){
   console.log('[Boot] file:// detected, skipping SQLite/SW');
 }
 loadOrder();
-loadClients();
+if(!_isPublicApp()) loadClients();
 init();
 if(document.readyState === 'complete' || document.readyState === 'interactive'){
   initOrderSystem();
@@ -5945,7 +6129,12 @@ window._sqliteReady = 'skip';
 </script>
 <script>if (false) { // web per a clients: sense còpia offline
   var _swRefreshing = false;
+  var _swFirstPublicInstall = typeof NEXE_PUBLIC !== 'undefined' && NEXE_PUBLIC && !navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if(_swFirstPublicInstall){
+      _swFirstPublicInstall = false;
+      return;
+    }
     if(_swRefreshing) return;
     _swRefreshing = true;
     window.location.reload();
@@ -6073,7 +6262,6 @@ window._sqliteReady = 'skip';
 .client-form input.err { border-color:#d70015; background:#fff2f2; }
 .client-form .full { grid-column:1 / -1; }
 .client-form-title { font-weight:700; font-size:15px; margin:2px 0 6px; }
-.client-form-note { font-size:12px; color:#6e6e73; margin:-2px 0 8px; }
 body.presentation .client-form input { background:#2c2c2e; color:#f5f5f7; border-color:rgba(255,255,255,.15); }
 #orderShare.wa { background:#25d366 !important; color:#fff !important; }
 
@@ -6145,12 +6333,14 @@ function doEl(el){
   });
 }
 var SKIP = {SCRIPT:1, STYLE:1, NOSCRIPT:1};
+function legalText(el){ var langRoot = el && el.nodeType===1 && el.closest('[lang="ca"]'); return langRoot && langRoot !== document.documentElement; }
 function walk(root){
+  if(legalText(root.nodeType===3 ? root.parentElement : root)) return;
   if(root.nodeType===3){ if(root.parentNode && !SKIP[root.parentNode.nodeName] && root.parentNode.nodeName!=='TEXTAREA') doText(root); return; }
   if(root.nodeType!==1 || SKIP[root.nodeName] || root.id==='langPick') return;
   doEl(root);
   var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT, {acceptNode:function(n){
-    if(n.nodeType===1) return (SKIP[n.nodeName]||n.id==='langPick') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+    if(n.nodeType===1) return (SKIP[n.nodeName]||n.id==='langPick'||legalText(n)) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
     return NodeFilter.FILTER_ACCEPT; }});
   var n; while((n=w.nextNode())){ if(n.nodeType===3){ if(n.parentNode.nodeName!=='TEXTAREA') doText(n); } else doEl(n); }
 }
@@ -6183,6 +6373,7 @@ function start(){
   OBS = new MutationObserver(function(ms){
     if(busy) return; busy=true;
     ms.forEach(function(m){
+      if(legalText(m.target.nodeType===3 ? m.target.parentElement : m.target)) return;
       if(m.type==='characterData'){ ORIG.set(m.target, m.target.nodeValue); doText(m.target); }
       else if(m.type==='attributes'){ var mm=AORIG.get(m.target); if(!mm){ doEl(m.target); } else { var v=m.target.getAttribute(m.attributeName);
           var cur = tr(mm[m.attributeName]||'')||mm[m.attributeName]; if(v!==cur){ mm[m.attributeName]=v; doEl(m.target);} } }
@@ -6195,5 +6386,48 @@ function start(){
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();
 </script>
+<dialog id="waDraft" class="legal-dialog" aria-labelledby="waTitle" lang="ca">
+  <form method="dialog">
+    <h2 id="waTitle">Sol·licitud comercial</h2>
+    <p id="waIntro"></p>
+    <label for="waText">Esborrany del missatge</label>
+    <textarea id="waText" rows="7" readonly></textarea>
+    <div class="legal-actions">
+      <button type="button" id="waCopy">Copia el missatge</button>
+      <a id="waOpen" href="https://wa.me/34610732047" target="_blank" rel="noreferrer">Obre WhatsApp</a>
+      <button>Tanca</button>
+    </div>
+    <p id="waStatus" role="status"></p>
+  </form>
+</dialog><dialog id="mediaSettings" class="legal-dialog" aria-labelledby="mediaTitle" lang="ca">
+  <form id="mediaForm">
+    <h2 id="mediaTitle">Contingut extern</h2>
+    <p>El catàleg funciona amb el contingut propi. Pots permetre fotos de proveïdors
+       i vídeos de YouTube. Quan es carreguen, els proveïdors reben dades de connexió
+       i poden llegir o desar informació al dispositiu. Si canvies quins
+       continguts permetre, es tornarà a carregar la pàgina.</p>
+    <p><a href="galetes.html">Consulta la política de galetes</a>.</p>
+    <label><input type="checkbox" name="photos"> Fotos d’Insemac Tools i Cimaser</label>
+    <label><input type="checkbox" name="videos"> Vídeos de YouTube (Google)</label>
+    <div class="legal-actions">
+      <button type="button" id="mediaReject">Rebutja-ho tot</button>
+      <button type="submit">Desa la selecció</button>
+      <button type="button" id="mediaAccept">Accepta-ho tot</button>
+    </div>
+    <p id="mediaStatus" role="status"></p>
+  </form>
+</dialog>
+<aside id="mediaNotice" class="legal-notice" lang="ca" aria-label="Preferències de galetes" hidden>
+  <p>NEXE Industrial demana permís per carregar fotos de proveïdors i vídeos de
+     YouTube. Aquests tercers poden desar dades al navegador. YouTube també les
+     pot fer servir per mesurar l’ús i personalitzar anuncis. Consulta la
+     <a href="galetes.html">política de galetes</a>.</p>
+  <div class="legal-actions">
+    <button type="button" id="mediaNone">Rebutja-ho tot</button>
+    <button type="button" data-media-settings>Configura</button>
+    <button type="button" id="mediaAll">Accepta-ho tot</button>
+  </div>
+  <p id="mediaNoticeStatus" role="status"></p>
+</aside>
 </body>
 </html>

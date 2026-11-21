@@ -6,10 +6,11 @@
  * La versió la posa tools/nexe.py a cada build: quan canvia, es desa la
  * versió nova i l'app es recarrega sola.
  */
-var VERSION = '6ccbe8fe5063';
+var VERSION = '0144a5f8a460';
 var CACHE = 'crown-cataleg-' + VERSION;
-var CORE = ['./', './index.html', './manifest.json', './clau.json',
+var CORE = ['./', './index.html', './manifest.json', 
             './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+var LEGAL_PAGES = ["avis-legal.html", "privacitat.html", "galetes.html", "contacte.html"]; // S’emplena al build Crown.
 var OTHER_APPS = []; // subcarpetes amb una app independent
 var NETWORK_TIMEOUT = 4000; // amb poca cobertura, no esperar més: obrir la còpia desada
 
@@ -17,7 +18,7 @@ self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE).then(function (cache) {
       // Un a un: si un fitxer opcional no hi és, la resta es desa igualment
-      return Promise.all(CORE.map(function (url) {
+      return Promise.all(CORE.concat(LEGAL_PAGES.map(function (page) { return './' + page; })).map(function (url) {
         return cache.add(new Request(url, { cache: 'reload' })).catch(function () {});
       }));
     }).then(function () { return self.skipWaiting(); })
@@ -70,6 +71,13 @@ self.addEventListener('fetch', function (event) {
 
   // Pàgina: la xarxa si respon ràpid (per tenir la darrera versió); si no, la còpia.
   if (req.mode === 'navigate') {
+    if (LEGAL_PAGES.length && rel !== '' && rel !== 'index.html') {
+      if (LEGAL_PAGES.indexOf(rel) === -1) return;
+      event.respondWith(
+        fromNetwork(req, NETWORK_TIMEOUT).catch(function () { return caches.match('./' + rel); })
+      );
+      return;
+    }
     event.respondWith(
       fromNetwork(req, NETWORK_TIMEOUT).then(function (res) {
         if (res.ok) {
@@ -90,7 +98,7 @@ self.addEventListener('fetch', function (event) {
   if (rel === 'clau.json') {
     event.respondWith(
       fromNetwork(req, NETWORK_TIMEOUT).then(function (res) {
-        if (res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put('./clau.json', copy); }); }
+        if (res.ok) { var copy = res.clone(); caches.open(CACHE).then(function (c) { c.put( copy); }); }
         return res;
       }).catch(function () { return caches.match('./clau.json'); })
     );
